@@ -53,6 +53,7 @@ join_session(session_id)
 
 get_flags(session_id)
 
+print ("------ Sleeping for 10 seconds ------")
 # Pause for setup
 time.sleep(10)
 
@@ -60,11 +61,13 @@ time.sleep(10)
 var_send_id = 4  # Placeholder variable ID
 data_array = list(range(300, 320))
 check_and_send_data(session_id, var_send_id, data_array)
+print ("------ Sleeping for 10 seconds ------")
 time.sleep(10)
 
 
 # Receive data
 var_receive_id = 1
+print ("------ Sleeping for 10 seconds ------")
 check_and_receive_data(session_id, var_receive_id)
 
 # Pause before ending session

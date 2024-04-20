@@ -295,48 +295,77 @@ int send_data_to_server(const char* base_url, const char* session_id, int var_id
     return 1;
 }
 
-size_t write_callback1(char* ptr, size_t size, size_t nmemb, void* userdata) {
-    size_t total_size = size * nmemb;
-    memcpy(userdata, ptr, total_size);
-    return total_size;
+// Structure to hold the data received from server
+struct MemoryStruct {
+    char *memory;
+    size_t size;
+};
+
+// Callback function to handle the data received from the server
+static size_t write_callback1(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t real_size = size * nmemb;
+    struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+
+    char *ptr = realloc(mem->memory, mem->size + real_size + 1);
+    if (ptr == NULL) {
+        // Out of memory!
+        fprintf(stderr, "Not enough memory (realloc returned NULL)\n");
+        return 0; // This will cause the transfer to stop
+    }
+
+    mem->memory = ptr;
+    memcpy(&(mem->memory[mem->size]), contents, real_size);
+    mem->size += real_size;
+    mem->memory[mem->size] = 0;
+    return real_size;
 }
 
-// Function to fetch data from serve
+// Function to fetch data from the server
 int receive_data_from_server(const char* base_url, const char* session_id, int var_id, double* arr, int n) {
     CURL *curl;
     CURLcode res;
-    struct curl_slist *headers = NULL;
-    char fullUrl[512];  // Buffer for the full URL including query parameters
+    struct MemoryStruct chunk;
+    char fullUrl[512];
+
+    // Initialize the memory structure
+    chunk.memory = malloc(1);  // Start with one byte.
+    chunk.size = 0;            // No data at this point.
 
     // Construct the URL with query parameters
     snprintf(fullUrl, sizeof(fullUrl), "%s/receive_data?session_id=%s&var_id=%d", base_url, session_id, var_id);
 
     curl = curl_easy_init();
-    if (!curl) {
+    if (curl) {
+        curl_easy_setopt(curl, CURLOPT_URL, fullUrl);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback1);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+
+        // Perform the HTTP GET request
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        } else {
+            // Ensure we've received enough data to fill the expected number of doubles
+            if (chunk.size == n * sizeof(double)) {
+                memcpy(arr, chunk.memory, chunk.size);
+            } else {
+                fprintf(stderr, "Received data size does not match expected size\n");
+                res = CURLE_RECV_ERROR; // Use an appropriate error code
+            }
+        }
+
+        // Clean up
+        curl_easy_cleanup(curl);
+        free(chunk.memory);
+    } else {
         fprintf(stderr, "Failed to initialize curl\n");
-        return -1;
+        res = CURLE_FAILED_INIT;
     }
 
-    // Set up the request with the full URL
-    curl_easy_setopt(curl, CURLOPT_URL, fullUrl);
-
-    // No need to set CURLOPT_HTTPHEADER for GET request query parameters
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback1);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, arr);
-
-    // Perform the HTTP GET request
-    res = curl_easy_perform(curl);
-
-    // Cleanup
-    curl_easy_cleanup(curl);
-
-    if (res != CURLE_OK) {
-        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-        return 0;
-    }
-
-    return 1;
+    return (res == CURLE_OK) ? 1 : 0; // Return 1 on success, 0 on failure
 }
+
 
 void end_session_c(const char* base_url, const char* session_id, const char* client_id) {
     CURL *curl;

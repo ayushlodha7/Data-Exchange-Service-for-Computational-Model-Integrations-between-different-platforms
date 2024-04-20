@@ -2,7 +2,7 @@ import requests
 import struct
 
 
-SERVER_URL = "http://128.55.151.83:8080"
+SERVER_URL = "http://128.55.151.69:8080"
 
 client_id  = "ClientB"
 

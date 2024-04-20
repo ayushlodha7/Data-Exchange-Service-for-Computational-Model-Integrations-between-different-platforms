@@ -6,9 +6,23 @@ from fastapi import FastAPI, HTTPException, Request, Response, Header
 import struct
 import threading
 import asyncio
+import warnings
 
-
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
+    app.state.print_sessions_task = asyncio.create_task(print_sessions_every_10_seconds())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    task = app.state.print_sessions_task
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 async def print_sessions_every_10_seconds():
     while True:

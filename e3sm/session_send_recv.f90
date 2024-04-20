@@ -4,7 +4,7 @@ module session_send_recv
 
   implicit none
 
-    character(len=256), parameter :: url = "http://128.55.151.83:8080"
+    character(len=256), parameter :: url = "http://128.55.151.69:8080"
 contains
 
   subroutine start_session()
@@ -132,9 +132,9 @@ contains
     integer :: status_receive
     character(len=256) :: session_id
     integer :: var_receive
-    integer :: sleep_off_time
+    integer :: sleep_time, base_sleep_time
 
-    sleep_off_time = 10
+    base_sleep_time = 5
     max_retries = 5
     retries = 0
 
@@ -149,9 +149,11 @@ contains
 
     ! Check flag and attempt to receive data with retries
     do while (retries < max_retries)
+      sleep_time = base_sleep_time * (2*retries)  ! Exponential back-off
       flag = get_variable_flag_c(trim(url), trim(session_id), var_receive)
       print *, "Flag :",flag 
       if (flag ==1) then 
+        print *, "Got the Flag ---- waiting to receive data "
         status_receive = receive_data_from_server(trim(url), trim(session_id), var_receive, arr_receive, arr_length)
         if (status_receive == 1) then
             print *, "Data received successfully:"
@@ -165,7 +167,7 @@ contains
       else
         print *, "Flag is not set for receiving, retrying..."
         retries = retries + 1
-        call sleep(sleep_off_time)
+        call sleep(sleep_time)
       end if
     end do
 
